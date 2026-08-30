@@ -30,10 +30,11 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get(
-    'ALLOWED_HOSTS',
-    'localhost,127.0.0.1'
-).split(',')
+ALLOWED_HOSTS = [
+    "blog-api-1-kt4y.onrender.com",
+    "localhost",
+    "127.0.0.1",
+]
 
 
 # ============================================================
