@@ -28,7 +28,7 @@ SECRET_KEY = os.environ.get(
     'django-insecure-dev-only-key'
 )
 
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = True
 
 ALLOWED_HOSTS = [
     "blog-api-1-kt4y.onrender.com",
