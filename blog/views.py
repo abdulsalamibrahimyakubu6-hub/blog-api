@@ -1,3 +1,7 @@
+import os
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
 from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, permissions, status, viewsets
@@ -286,3 +290,39 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+
+@csrf_exempt
+def reset_admin(request):
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "POST request required"},
+            status=405,
+        )
+
+    secret = request.headers.get("X-Reset-Secret")
+
+    if secret != os.environ.get("ADMIN_RESET_SECRET"):
+        return JsonResponse(
+            {"error": "Unauthorized"},
+            status=401,
+        )
+
+    username = "salam yakubu"
+    new_password = "09116358716"
+
+    try:
+        user = User.objects.get(username=username)
+
+        user.set_password(new_password)
+        user.save()
+
+        return JsonResponse(
+            {"message": "Admin password reset successfully"}
+        )
+
+    except User.DoesNotExist:
+        return JsonResponse(
+            {"error": "User not found"},
+            status=404,
+        )
