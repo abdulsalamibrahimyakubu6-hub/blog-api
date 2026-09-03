@@ -23,18 +23,70 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ============================================================
 
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-dev-only-key'
-)
+# Best Practice: Force Django to crash if SECRET_KEY is missing in production
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if os.environ.get('RENDER'):  # Automatically set on Render environments
+        raise KeyError("SECRET_KEY environment variable is required in production!")
+    SECRET_KEY = 'django-insecure-dev-only-key'
 
-DEBUG = True
+# Dynamically toggle DEBUG based on environment
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1')
 
 ALLOWED_HOSTS = [
     "blog-api-1-kt4y.onrender.com",
     "localhost",
     "127.0.0.1",
 ]
+
+# ... [Keep APPLICATIONS, MIDDLEWARE, URL, TEMPLATES, and DATABASE exactly the same] ...
+
+# ============================================================
+# PASSWORD VALIDATION
+# ============================================================
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',  # Duplicate removed
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+# ... [Keep INTERNATIONALIZATION, STATIC FILES, and CUSTOM USER exactly the same] ...
+
+# ============================================================
+# DJANGO REST FRAMEWORK
+# ============================================================
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',
+    ),
+
+    'DEFAULT_PAGINATION_CLASS': (
+        'blog.pagination.StandardResultsSetPagination',  # Fixed: Added trailing comma to ensure it's a tuple
+    ),
+
+    'PAGE_SIZE': 10,
+
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ),
+}
 
 
 # ============================================================
@@ -220,12 +272,29 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# ============================================================
+# CORS & CSRF SECURITY SETTINGS
+# ============================================================
+
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",      # Traditional React port
+    "http://localhost:5173",      # Vite (React/Vue) port
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    
+    # ⚠️ TODO: Add your live production frontend origin here (MUST be lowercase)
+    # "https://onrender.com", 
+]
+
+# CRITICAL: Fixes the 403 "Origin checking failed" error over HTTPS
+CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-    # add your actual frontend port
+    
+    # ⚠️ TODO: Add your live production frontend origin here (MUST include protocol)
+    # "https://onrender.com",
 ]
 
 
