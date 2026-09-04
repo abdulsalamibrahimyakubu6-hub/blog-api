@@ -281,6 +281,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",      # Vite (React/Vue) port
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+
+    # Live Vercel Frontend:
+    "https://blog-beta-two-38.vercel.app",
     
     # ⚠️ TODO: Add your live production frontend origin here (MUST be lowercase)
     # "https://onrender.com", 
@@ -292,6 +295,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+
+    # Live Vercel Frontend:
+    "https://blog-beta-two-38.vercel.app",
     
     # ⚠️ TODO: Add your live production frontend origin here (MUST include protocol)
     # "https://onrender.com",
