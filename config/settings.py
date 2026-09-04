@@ -35,7 +35,7 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1')
 
 ALLOWED_HOSTS = [
     "blog-api-1-kt4y.onrender.com",
-    "localhost",
+    "blog-beta-two-38.vercel.app",
     "127.0.0.1",
 ]
 
