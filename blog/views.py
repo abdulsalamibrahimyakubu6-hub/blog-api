@@ -19,7 +19,9 @@ from .serializers import (
     PostSerializer,
     RegisterSerializer,
     UserSerializer,
+    MicroPostSerializer,
 )
+from .models import MicroPost
 
 User = get_user_model()
 
@@ -255,6 +257,58 @@ class PostViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+
+class MicroPostViewSet(viewsets.ModelViewSet):
+    """Micro‑blogging post viewset (Twitter‑like)."""
+    queryset = (
+        MicroPost.objects.select_related("user")
+        .prefetch_related("likes", "reposts")
+        .all()
+    )
+    serializer_class = MicroPostSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [filters.OrderingFilter]
+    ordering = ["-created_at"]
+    ordering_fields = ["created_at"]
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="repost")
+    def repost(self, request, pk=None):
+        """Create a repost of an existing MicroPost."""
+        original = self.get_object()
+        repost = MicroPost.objects.create(
+            user=request.user,
+            content=request.data.get("content", ""),
+            type="repost",
+            parent_post=original,
+            media=request.data.get("media", []),
+            media_type=request.data.get("media_type", "none"),
+        )
+        serializer = self.get_serializer(repost, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="like")
+    def like(self, request, pk=None):
+        original = self.get_object()
+        like, created = MicroPostLike.objects.get_or_create(micropost=original, user=request.user)
+        likes_count = MicroPostLike.objects.filter(micropost=original).count()
+        return Response({"detail": "Liked" if created else "Already liked", "likes_count": likes_count}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post", "delete"], url_path="unlike")
+    def unlike(self, request, pk=None):
+        original = self.get_object()
+        deleted, _ = MicroPostLike.objects.filter(micropost=original, user=request.user).delete()
+        likes_count = MicroPostLike.objects.filter(micropost=original).count()
+        return Response({"detail": "Unliked" if deleted else "Not liked", "likes_count": likes_count}, status=status.HTTP_200_OK)
+
+    # End of MicroPostViewSet
 
 class CommentViewSet(viewsets.ModelViewSet):
     """

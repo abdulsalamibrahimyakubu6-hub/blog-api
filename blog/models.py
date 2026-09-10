@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.text import slugify
+import uuid
 
 
 class User(AbstractUser):
@@ -105,5 +106,58 @@ class Like(models.Model):
             )
         ]
 
+class MicroPostLike(models.Model):
+    """Represents a user liking a MicroPost."""
+    micropost = models.ForeignKey('MicroPost', on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='micropost_likes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['micropost', 'user'], name='unique_micropost_user_like')
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} liked {self.micropost}"
     def __str__(self) -> str:
         return f"{self.user} liked {self.post}"
+
+
+class MicroPost(models.Model):
+    """Micro‑blogging post model mimicking Twitter/X"""
+
+    TYPE_CHOICES = [
+        ("standard", "Standard"),
+        ("repost", "Repost"),
+    ]
+    MEDIA_TYPE_CHOICES = [
+        ("image", "Image"),
+        ("video", "Video"),
+        ("none", "None"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="micro_posts"
+    )
+    content = models.CharField(max_length=280)
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES, default="standard")
+    parent_post = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="reposts",
+    )
+    media = models.JSONField(default=list, blank=True)
+    media_type = models.CharField(
+        max_length=10, choices=MEDIA_TYPE_CHOICES, default="none"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user.username}: {self.content[:20]}"

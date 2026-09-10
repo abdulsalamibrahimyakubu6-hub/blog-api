@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Comment, Like, Post
+from .models import Comment, Like, Post, MicroPost
 
 User = get_user_model()
 
@@ -159,6 +159,48 @@ class PostSerializer(serializers.ModelSerializer):
 
 
 class PostDetailSerializer(PostSerializer):
+    """Detailed post serializer including top-level comments with their nested replies."""
+    comments = serializers.SerializerMethodField()
+
+    class Meta(PostSerializer.Meta):
+        fields = PostSerializer.Meta.fields + ["comments"]
+
+    def get_comments(self, obj):
+        # Top-level comments only (parent is None)
+        root_comments = obj.comments.filter(parent=None).select_related("author").prefetch_related("replies")
+        return CommentSerializer(root_comments, many=True, context=self.context).data
+
+
+class MicroPostSerializer(serializers.ModelSerializer):
+    """Serializer for MicroPost model."""
+    author = UserSerializer(read_only=True)
+    likes_count = serializers.IntegerField(read_only=True)
+    comments_count = serializers.IntegerField(read_only=True)
+    is_liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MicroPost
+        fields = [
+            "id",
+            "user",
+            "author",
+            "content",
+            "type",
+            "parent_post",
+            "media",
+            "media_type",
+            "created_at",
+            "likes_count",
+            "comments_count",
+            "is_liked",
+        ]
+        read_only_fields = ["id", "author", "likes_count", "comments_count", "is_liked", "created_at"]
+
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return obj.likes.filter(user=request.user).exists()
+        return False
     """Detailed post serializer including top-level comments with their nested replies."""
 
     comments = serializers.SerializerMethodField()

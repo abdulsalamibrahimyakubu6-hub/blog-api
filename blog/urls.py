@@ -6,12 +6,12 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
-from .views import CommentViewSet, MeView, PostViewSet, RegisterView
+from .views import CommentViewSet, MeView, PostViewSet, RegisterView, MicroPostViewSet
 
 router = DefaultRouter()
 router.register(r"posts", PostViewSet, basename="post")
 router.register(r"comments", CommentViewSet, basename="comment")
-
+router.register(r"microposts", MicroPostViewSet, basename="micropost")
 urlpatterns = [
     # Authentication endpoints
     path("auth/register/", RegisterView.as_view(), name="register"),
