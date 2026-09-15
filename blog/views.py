@@ -1,3 +1,4 @@
+from blog.models import MicroPostLike
 import os
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
