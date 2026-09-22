@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Comment, Like, Post
+from .models import Comment, Like, Post, MicroPost, MicroPostLike
 
 User = get_user_model()
 
@@ -25,6 +25,17 @@ class AuthenticationApiTests(APITestCase):
         self.assertTrue(user.check_password("A-secure-password-123"))
         self.assertEqual(user.bio, "Tech writer")
         self.assertNotIn("password", response.data)
+
+    def test_home_page_returns_api_root_json(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Welcome to the Blog & MicroPost REST API", response.json()["message"])
+        self.assertIn("/api/posts/", response.json()["endpoints"]["posts"])
+
+    def test_register_get_request_returns_without_500_error(self):
+        response = self.client.get("/api/auth/register/")
+        # GET on CreateAPIView renders the browsable API or returns 405 Method Not Allowed cleanly
+        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_405_METHOD_NOT_ALLOWED])
 
     def test_register_rejects_mismatched_passwords(self):
         response = self.client.post(
@@ -92,6 +103,27 @@ class AuthenticationApiTests(APITestCase):
         self.assertEqual(patch_res.data["bio"], "Updated Bio")
         user.refresh_from_db()
         self.assertEqual(user.bio, "Updated Bio")
+
+    def test_update_profile_duplicate_email_fails(self):
+        User.objects.create_user(
+            username="existing_user",
+            email="taken@example.com",
+            password="Password123!",
+        )
+        user = User.objects.create_user(
+            username="updating_user",
+            email="myemail@example.com",
+            password="Password123!",
+        )
+        self.client.force_authenticate(user=user)
+
+        patch_res = self.client.patch(
+            "/api/auth/me/",
+            {"email": "taken@example.com"},
+            format="json",
+        )
+        self.assertEqual(patch_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", patch_res.data)
 
 
 class PostApiTests(APITestCase):
@@ -300,3 +332,75 @@ class LikeAndCommentApiTests(APITestCase):
         del_res = self.client.delete(f"/api/comments/{comment.id}/")
         self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Comment.objects.filter(id=comment.id).exists())
+
+
+class MicroPostApiTests(APITestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(
+            username="micro_user1", email="micro1@example.com", password="Password123!"
+        )
+        self.user2 = User.objects.create_user(
+            username="micro_user2", email="micro2@example.com", password="Password123!"
+        )
+        self.micropost1 = MicroPost.objects.create(
+            user=self.user1, content="Hello MicroPost world!"
+        )
+
+    def test_list_microposts(self):
+        response = self.client.get("/api/microposts/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["content"], "Hello MicroPost world!")
+
+    def test_create_micropost_authenticated(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(
+            "/api/microposts/",
+            {"content": "Just setting up my micropost API!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["content"], "Just setting up my micropost API!")
+        self.assertEqual(response.data["author"]["username"], "micro_user1")
+
+    def test_like_and_unlike_micropost(self):
+        self.client.force_authenticate(user=self.user2)
+
+        # Like micropost
+        like_res = self.client.post(f"/api/microposts/{self.micropost1.id}/like/")
+        self.assertEqual(like_res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(like_res.data["likes_count"], 1)
+
+        # Retrieve micropost detail to verify likes_count & is_liked
+        detail_res = self.client.get(f"/api/microposts/{self.micropost1.id}/")
+        self.assertEqual(detail_res.data["likes_count"], 1)
+        self.assertTrue(detail_res.data["is_liked"])
+
+        # Unlike micropost
+        unlike_res = self.client.post(f"/api/microposts/{self.micropost1.id}/unlike/")
+        self.assertEqual(unlike_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(unlike_res.data["likes_count"], 0)
+
+    def test_repost_micropost(self):
+        self.client.force_authenticate(user=self.user2)
+        repost_res = self.client.post(
+            f"/api/microposts/{self.micropost1.id}/repost/",
+            {"content": "Check out this micropost!"},
+            format="json",
+        )
+        self.assertEqual(repost_res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(repost_res.data["type"], "repost")
+        self.assertEqual(str(repost_res.data["parent_post"]), str(self.micropost1.id))
+
+    def test_delete_micropost_by_non_author_forbidden(self):
+        self.client.force_authenticate(user=self.user2)
+        response = self.client.delete(f"/api/microposts/{self.micropost1.id}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(MicroPost.objects.filter(id=self.micropost1.id).exists())
+
+    def test_delete_micropost_by_author_succeeds(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.delete(f"/api/microposts/{self.micropost1.id}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(MicroPost.objects.filter(id=self.micropost1.id).exists())
+

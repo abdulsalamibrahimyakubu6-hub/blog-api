@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-
-from .models import Comment, Like, Post, User
+from .models import Comment, Like, Post, User, MicroPost, MicroPostLike
 
 
 @admin.register(User)
@@ -35,7 +34,6 @@ class LikeInline(admin.TabularInline):
 class PostAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "title",
         "author",
         "likes_count",
         "comments_count",
@@ -60,3 +58,18 @@ class LikeAdmin(admin.ModelAdmin):
     list_display = ("id", "post", "user", "created_at")
     list_filter = ("created_at",)
     search_fields = ("user__username", "post__title")
+
+
+@admin.register(MicroPost)
+class MicroPostAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "image", "type", "media_type", "created_at")
+    list_filter = ("created_at", "type", "media_type")
+    search_fields = ("content", "user__username")
+
+@admin.register(MicroPostLike)
+class MicroPostLikeAdmin(admin.ModelAdmin):
+    list_display = ("id", "micropost", "user", "created_at")
+    list_filter = ("created_at",)
+
+
+

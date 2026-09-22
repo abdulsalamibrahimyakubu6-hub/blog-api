@@ -13,80 +13,42 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
-
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# ============================================================
-# SECURITY
-# ============================================================
+IS_RENDER = bool(os.environ.get('RENDER'))
 
 # Best Practice: Force Django to crash if SECRET_KEY is missing in production
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
-    if os.environ.get('RENDER'):  # Automatically set on Render environments
+    if IS_RENDER:
         raise KeyError("SECRET_KEY environment variable is required in production!")
-    SECRET_KEY = 'django-insecure-dev-only-key'
+    SECRET_KEY = 'django-insecure-dev-only-key-32-chars-long-minimum-secret-key'
 
-# Dynamically toggle DEBUG based on environment
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1')
+# Dynamically toggle DEBUG based on environment (defaults to False on Render/production)
+default_debug = 'False' if IS_RENDER else 'True'
+DEBUG = os.environ.get('DEBUG', default_debug).lower() in ('true', '1')
 
 ALLOWED_HOSTS = [
     "blog-api-1-kt4y.onrender.com",
     "blog-beta-two-38.vercel.app",
     "127.0.0.1",
+    "localhost",
 ]
 
-# ... [Keep APPLICATIONS, MIDDLEWARE, URL, TEMPLATES, and DATABASE exactly the same] ...
+render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if render_host and render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_host)
 
-# ============================================================
-# PASSWORD VALIDATION
-# ============================================================
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',  # Duplicate removed
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-# ... [Keep INTERNATIONALIZATION, STATIC FILES, and CUSTOM USER exactly the same] ...
-
-# ============================================================
-# DJANGO REST FRAMEWORK
-# ============================================================
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.AllowAny',
-    ),
-
-    'DEFAULT_PAGINATION_CLASS': (
-        'blog.pagination.StandardResultsSetPagination',  # Fixed: Added trailing comma to ensure it's a tuple
-    ),
-
-    'PAGE_SIZE': 10,
-
-    'DEFAULT_FILTER_BACKENDS': (
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
-    ),
-}
+env_allowed_hosts = os.environ.get('ALLOWED_HOSTS')
+if env_allowed_hosts:
+    for h in env_allowed_hosts.split(','):
+        h = h.strip()
+        if h and h not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(h)
 
 
 # ============================================================
@@ -106,8 +68,6 @@ INSTALLED_APPS = [
     'django_filters',
 
     'blog',
-
-    
 ]
 
 
@@ -161,14 +121,13 @@ TEMPLATES = [
 # ============================================================
 # DATABASE
 # ============================================================
-# Keep SQLite for local development for now.
-# We will configure PostgreSQL when we create the Render database.
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 
@@ -182,9 +141,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -209,12 +165,15 @@ USE_TZ = True
 
 
 # ============================================================
-# STATIC FILES
+# STATIC FILES & MEDIA
 # ============================================================
 
 STATIC_URL = 'static/'
-
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Media (user‑uploaded files)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 STORAGES = {
     'default': {
@@ -246,9 +205,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ),
 
-    'DEFAULT_PAGINATION_CLASS': (
-        'blog.pagination.StandardResultsSetPagination'
-    ),
+    'DEFAULT_PAGINATION_CLASS': 'blog.pagination.StandardResultsSetPagination',
 
     'PAGE_SIZE': 10,
 
@@ -272,42 +229,62 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+
 # ============================================================
 # CORS & CSRF SECURITY SETTINGS
 # ============================================================
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",      # Traditional React port
-    "http://localhost:5173",      # Vite (React/Vue) port
+    "http://localhost:3000",
+    "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-
-    # Live Vercel Frontend:
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
     "https://blog-beta-two-38.vercel.app",
-    
-    # ⚠️ TODO: Add your live production frontend origin here (MUST be lowercase)
-    # "https://onrender.com", 
 ]
 
-# CRITICAL: Fixes the 403 "Origin checking failed" error over HTTPS
+env_cors = os.environ.get('CORS_ALLOWED_ORIGINS')
+if env_cors:
+    for origin in env_cors.split(','):
+        origin = origin.strip()
+        if origin and origin not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(origin)
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-
-    # Live Vercel Frontend:
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
     "https://blog-beta-two-38.vercel.app",
-    
-    # ⚠️ TODO: Add your live production frontend origin here (MUST include protocol)
-    # "https://onrender.com",
 ]
+
+env_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS')
+if env_csrf:
+    for origin in env_csrf.split(','):
+        origin = origin.strip()
+        if origin and origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
+
+
+# ============================================================
+# PRODUCTION SECURITY
+# ============================================================
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 
 # ============================================================
 # EMAIL
 # ============================================================
-# Console backend is fine for local development.
-# We can configure a real email provider later if needed.
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
