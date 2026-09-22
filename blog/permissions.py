@@ -21,3 +21,4 @@ class IsAuthorOrReadOnly(permissions.BasePermission):
         # Support models that use either 'author' or 'user' as the owner field
         owner = getattr(obj, "author", None) or getattr(obj, "user", None)
         return owner == request.user
+        
