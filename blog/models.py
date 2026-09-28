@@ -12,6 +12,7 @@ class User(AbstractUser):
 
     email = models.EmailField("email address", unique=True)
     bio = models.TextField(blank=True, max_length=500)
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
 
     REQUIRED_FIELDS = ["email"]
 
@@ -120,9 +121,6 @@ class MicroPostLike(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} liked {self.micropost}"
-    def __str__(self) -> str:
-        return f"{self.user} liked {self.post}"
-
 
 class MicroPost(models.Model):
     """Micro‑blogging post model mimicking Twitter/X"""
@@ -142,6 +140,7 @@ class MicroPost(models.Model):
         User, on_delete=models.CASCADE, related_name="micro_posts"
     )
     content = models.CharField(max_length=280)
+    image = models.ImageField(upload_to='microposts/', blank=True, null=True)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES, default="standard")
     parent_post = models.ForeignKey(
         "self",
@@ -161,3 +160,11 @@ class MicroPost(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username}: {self.content[:20]}"
+
+    @property
+    def likes_count(self) -> int:
+        return self.likes.count()
+
+    @property
+    def reposts_count(self) -> int:
+        return self.reposts.count()

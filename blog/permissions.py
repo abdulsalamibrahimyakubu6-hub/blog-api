@@ -18,4 +18,7 @@ class IsAuthorOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
 
-        return obj.author == request.user
+        # Support models that use either 'author' or 'user' as the owner field
+        owner = getattr(obj, "author", None) or getattr(obj, "user", None)
+        return owner == request.user
+        

@@ -1,27 +1,26 @@
 import os
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-
-from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .filters import PostFilter
-from .models import Comment, Like, Post
+from .models import Comment, Like, MicroPost, MicroPostLike, Post
 from .pagination import StandardResultsSetPagination
 from .permissions import IsAuthorOrReadOnly
 from .serializers import (
     CommentSerializer,
     LikeSerializer,
+    MicroPostSerializer,
     PostDetailSerializer,
     PostSerializer,
     RegisterSerializer,
     UserSerializer,
-    MicroPostSerializer,
+    UserUpdateSerializer,
 )
-from .models import MicroPost
 
 User = get_user_model()
 
@@ -51,12 +50,7 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_serializer_class(self):
         if self.request.method in ("PUT", "PATCH"):
-
-            class EditableUserSerializer(UserSerializer):
-                class Meta(UserSerializer.Meta):
-                    read_only_fields = ["id", "username", "date_joined"]
-
-            return EditableUserSerializer
+            return UserUpdateSerializer
 
         return UserSerializer
 
@@ -100,7 +94,6 @@ class PostViewSet(viewsets.ModelViewSet):
     ordering_fields = [
         "created_at",
         "updated_at",
-        "title",
     ]
 
     ordering = ["-created_at"]
@@ -274,7 +267,9 @@ class MicroPostViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        if self.action in ["like", "unlike", "repost"]:
+            return [permissions.IsAuthenticated()]
+        return [IsAuthorOrReadOnly()]
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -332,6 +327,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     )
 
     serializer_class = CommentSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
         if self.action in [
@@ -355,15 +351,28 @@ def reset_admin(request):
         )
 
     secret = request.headers.get("X-Reset-Secret")
+    env_secret = os.environ.get("ADMIN_RESET_SECRET")
 
-    if secret != os.environ.get("ADMIN_RESET_SECRET"):
+    if not secret or not env_secret or secret != env_secret:
         return JsonResponse(
             {"error": "Unauthorized"},
             status=401,
         )
 
-    username = "salam yakubu"
-    new_password = "09116358716"
+    import json
+    try:
+        payload = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        payload = {}
+
+    username = payload.get("username") or os.environ.get("ADMIN_RESET_USERNAME")
+    new_password = payload.get("new_password") or os.environ.get("ADMIN_RESET_PASSWORD")
+
+    if not username or not new_password:
+        return JsonResponse(
+            {"error": "username and new_password are required in request body or environment"},
+            status=400,
+        )
 
     try:
         user = User.objects.get(username=username)
